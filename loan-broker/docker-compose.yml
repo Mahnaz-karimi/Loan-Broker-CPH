@@ -1,0 +1,128 @@
+version: '3.5'
+services:
+
+  loan-broker-json-bank:
+    image: loanbrokerg4/bank-web-service:master
+    ports:
+      - 8091:8091
+    depends_on:
+      - rabbitmq
+
+  loan-broker-rabbit-bank:
+    image: loanbrokerg4/rabbit-bank:master
+    depends_on:
+      - rabbitmq
+
+  loan-broker-frontend:
+    image: loanbrokerg4/frontend:master
+    ports:
+      - 3000:3000
+    depends_on:
+      - loan-broker-api
+
+  loan-broker-rulebase:
+    image: loanbrokerg4/rule-base:master
+    ports:
+      - 8080:8080
+
+  loan-broker-aggregator:
+    build:
+      context: ./loan-broker-aggregator
+      dockerfile: Dockerfile
+    depends_on:
+      - rabbitmq
+      - postgres
+
+  loan-broker-api:
+    build:
+      context: ./loan-broker-api
+      dockerfile: Dockerfile
+    ports:
+      - 8081:8081
+    depends_on:
+    - rabbitmq
+    - postgres
+    - loan-broker-credit-score
+
+  loan-broker-normalizer:
+    build:
+      context: ./loan-broker-normalizer
+      dockerfile: Dockerfile
+    depends_on:
+    - rabbitmq
+    - loan-broker-aggregator
+
+  loan-broker-translator-g4-json:
+    build:
+      context: ./loan-broker-bank-translator-g4-web-service
+      dockerfile: Dockerfile
+    depends_on:
+      - rabbitmq
+      - loan-broker-json-bank
+
+  loan-broker-translator-xml:
+    build:
+      context: ./loan-broker-bank-translator-xml
+      dockerfile: Dockerfile
+    depends_on:
+    - rabbitmq
+
+  loan-broker-translator-json:
+    build:
+      context: ./loan-broker-bank-translator-json
+      dockerfile: Dockerfile
+    depends_on:
+    - rabbitmq
+
+  loan-broker-translator-rabbit:
+    build:
+      context: ./loan-broker-bank-translator-rabbit
+      dockerfile: Dockerfile
+    depends_on:
+      - rabbitmq
+      - loan-broker-rabbit-bank
+
+  loan-broker-credit-score:
+    build:
+      context: ./loan-broker-credit-score
+      dockerfile: Dockerfile
+    depends_on:
+    - rabbitmq
+    - loan-broker-gateway
+
+  loan-broker-gateway:
+    build:
+      context: ./loan-broker-recipient-gateway
+      dockerfile: Dockerfile
+    depends_on:
+      - rabbitmq
+      - loan-broker-translator-json
+      - loan-broker-translator-xml
+
+  loan-broker-get-banks:
+    build:
+      context: ./loan-broker-get-banks
+      dockerfile: Dockerfile
+    environment:
+      - GETBANKS_URL=http://loan-broker-rulebase:8080
+    depends_on:
+      - rabbitmq
+      - loan-broker-gateway
+      - loan-broker-rulebase
+
+  rabbitmq:
+    image: rabbitmq:3.7.8-management
+    ports:
+      - 15672:15672
+      - 5672:5672
+
+  postgres:
+    image: postgres:11.1
+    environment:
+      - POSTGRES_PASSWORD=password
+    ports:
+      - 5432:5432
+
+networks:
+  default:
+    driver: bridge
